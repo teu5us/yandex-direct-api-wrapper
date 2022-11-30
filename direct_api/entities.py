@@ -1,7 +1,5 @@
 from abc import ABC
-import pandas as pd
-from io import StringIO
-from .exceptions import ParameterError, YdAPIError
+from .exceptions import ParameterError, YdAPIError, YdUnknownError
 from .utils import generate_params, convert
 from typing import Optional, TYPE_CHECKING, Union
 
@@ -47,7 +45,13 @@ class BaseEntity(ABC):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__} - endpoint: {self.service}'
 
-    def _execute_method_by_ids(self, method: str, ids: list) -> dict:
+    def _get_data_key(self):
+        return '%ss' % self.__class__.__name__
+
+    def _execute_method_by_ids(self,
+                               method: str,
+                               ids: list,
+                               key: Optional[str] = None) -> dict:
         """
         :param method: str ('delete', 'activate', 'archive', 'unarchive', 'suspend', 'resume')
         :param service: str
@@ -55,26 +59,35 @@ class BaseEntity(ABC):
         :return: dict
         """
         params = {'SelectionCriteria': {'Ids': ids}}
-        return self._client._send_api_request(self.service.lower(), method,
-                                              params).json()
+        json_response = self._client._send_api_request(self.service.lower(),
+                                                       method, params).json()
+        if key is None:
+            key = self._get_data_key()
+        return YdResponseJSON(json_response, key)
 
-    def _add(self, objects: list) -> dict:
+    def _add(self, objects: list, key: Optional[str] = None) -> dict:
         params = {self.service: objects}
         json_response = self._client._send_api_request(self.service.lower(),
                                                        'add', params).json()
-        return YdResponseJSON(json_response)
+        if key is None:
+            key = self._get_data_key()
+        return YdResponseJSON(json_response, key)
 
-    def _update(self, objects: list) -> dict:
+    def _update(self, objects: list, key: Optional[str] = None) -> dict:
         params = {self.service: objects}
         json_response = self._client._send_api_request(self.service.lower(),
                                                        'update',
                                                        params).json()
-        return YdResponseJSON(json_response)
+        if key is None:
+            key = self._get_data_key()
+        return YdResponseJSON(json_response, key)
 
-    def _get(self, params: dict) -> dict:
+    def _get(self, params: dict, key: Optional[str] = None) -> dict:
         json_response = self._client._send_api_request(self.service.lower(),
                                                        'get', params).json()
-        return YdResponseJSON(json_response)
+        if key is None:
+            key = self._get_data_key()
+        return YdResponseJSON(json_response, key)
 
     def _delete(self, ids: list) -> dict:
         return self._execute_method_by_ids('delete', ids)
@@ -841,6 +854,65 @@ class Campaign(BaseEntity):
         """
         return self._delete(ids)
 
+    # def get(
+    #     self,
+    #     field_names: list,
+    #     ids: Optional[list] = None,
+    #     types: Optional[list] = None,
+    #     states: Optional[list] = None,
+    #     statuses: Optional[list] = None,
+    #     statuses_payments: Optional[list] = None,
+    #     text_campaign_field_names: Optional[list] = None,
+    #     mobile_app_campaign_field_names: Optional[list] = None,
+    #     dynamic_text_campaign_field_names: Optional[list] = None,
+    #     cpm_banner_campaign_field_names: Optional[list] = None,
+    #     limit: int = 1000,
+    #     offset: int = 0,
+    # ) -> dict:
+    #     """
+    #     doc - https://yandex.ru/dev/direct/doc/ref-v5/campaigns/get-docpage/
+    #     :param field_names: list
+    #     :param ids: list
+    #     :param types: list
+    #     :param states: list
+    #     :param statuses: list
+    #     :param statuses_payments: list
+    #     :param text_campaign_field_names: list
+    #     :param mobile_app_campaign_field_names: list
+    #     :param dynamic_text_campaign_field_names: list
+    #     :param cpm_banner_campaign_field_names: list
+    #     :param limit: int
+    #     :param offset: int
+    #     :return: dict
+    #     """
+    #     local_variables = locals()
+    #     params = {
+    #         'SelectionCriteria':
+    #         generate_params(
+    #             fields=[
+    #                 'ids', 'types', 'states', 'statuses', 'statuses_payments'
+    #             ],
+    #             function_kwargs=local_variables,
+    #         ),
+    #         'FieldNames':
+    #         field_names,
+    #         'Page': {
+    #             'Limit': limit,
+    #             'Offset': offset
+    #         },
+    #     }
+    #     params.update(
+    #         generate_params(
+    #             fields=[
+    #                 'text_campaign_field_names',
+    #                 'mobile_app_campaign_field_names',
+    #                 'dynamic_text_campaign_field_names',
+    #                 'cpm_banner_campaign_field_names',
+    #             ],
+    #             function_kwargs=local_variables,
+    #         ))
+    #     return self._get(params)
+
     def get(
         self,
         field_names: list,
@@ -853,25 +925,10 @@ class Campaign(BaseEntity):
         mobile_app_campaign_field_names: Optional[list] = None,
         dynamic_text_campaign_field_names: Optional[list] = None,
         cpm_banner_campaign_field_names: Optional[list] = None,
+        smart_campaign_field_names: Optional[list] = None,
         limit: int = 1000,
         offset: int = 0,
     ) -> dict:
-        """
-        doc - https://yandex.ru/dev/direct/doc/ref-v5/campaigns/get-docpage/
-        :param field_names: list
-        :param ids: list
-        :param types: list
-        :param states: list
-        :param statuses: list
-        :param statuses_payments: list
-        :param text_campaign_field_names: list
-        :param mobile_app_campaign_field_names: list
-        :param dynamic_text_campaign_field_names: list
-        :param cpm_banner_campaign_field_names: list
-        :param limit: int
-        :param offset: int
-        :return: dict
-        """
         local_variables = locals()
         params = {
             'SelectionCriteria':
@@ -895,6 +952,7 @@ class Campaign(BaseEntity):
                     'mobile_app_campaign_field_names',
                     'dynamic_text_campaign_field_names',
                     'cpm_banner_campaign_field_names',
+                    'smart_campaign_field_names',
                 ],
                 function_kwargs=local_variables,
             ))
@@ -1789,58 +1847,17 @@ class Client(BaseEntity):
 
 class YdResponseJSON:
 
-    def __init__(self, response: dict) -> None:
+    def __init__(self, response: dict, data_key: str) -> None:
         error = response.get('error', None)
         if error is not None:
             raise YdAPIError(error)
         else:
             result = response.get('result', None)
-            print('>>> YANDEX ', result.keys())
-        # if isinstance(response, dict):
-        #     self.response_name = self.get_first_key(response)
-        # elif isinstance(response, str):
-        #     self.response_name = 'report'
-        # else:
-        #     raise NotImplementedError
-        # if self.response_name == 'result':
-        #     data = response['result']
-        #     data_key = self.get_first_key(data)
-        #     self.data_rows = data[data_key]
-        # elif self.response_name == 'report':
-        #     self.data_rows, self._columns = self._fmt_report(response)
-        # elif self.response_name == 'error':
-        #     error = response['error']
-        #     error_code = error['error_code']
-        #     request_id = error['request_id']
-        #     error_detail = error['error_detail']
-        #     raise YandexResponseError(error_code, request_id, error_detail)
-        # else:
-        #     print(self.response_name)
-        #     raise Exception
-        # return None
-
-    @property
-    def columns(self):
-        assert self.response_name == 'report'
-        return self._columns
-
-    @staticmethod
-    def get_first_key(data: dict) -> str:
-        return list(data.keys())[0]
-
-    @staticmethod
-    def _fmt_report(string_report):
-        data_rows = []
-        df = pd.read_csv(StringIO(string_report),
-                         sep='\t',
-                         header=1,
-                         dtype=str).iloc[:-1]
-        df = df.replace('--', None)
-        columns = df.columns.values
-        print('-----------------------------')
-        print(df)
-        print('-----------------------------')
-        for entry in df.to_numpy().tolist():
-            data_row = {k: v for k, v in zip(columns, entry)}
-            data_rows.append(data_row)
-        return data_rows, columns
+            print('>>> YANDEX ', result.keys(), data_key)
+            data = result.get(data_key, None)
+            print(result)
+            print(data)
+            if data is not None:
+                self.data = data
+            else:
+                raise YdUnknownError

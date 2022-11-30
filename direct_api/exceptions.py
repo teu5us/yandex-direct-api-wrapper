@@ -6,6 +6,10 @@ class YdAuthError(YdException):
     pass
 
 
+class YdUnknownError(YdException):
+    pass
+
+
 class YdAPIError(YdException):
     __slots__ = ('error', 'code', 'message', 'request_params', 'request_id')
 
@@ -22,6 +26,7 @@ class YdAPIError(YdException):
 
 
 class ParameterError(YdException):
+
     def __init__(self, params: list) -> None:
         super().__init__(params)
         self.params = params

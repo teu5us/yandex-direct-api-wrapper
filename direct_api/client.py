@@ -1,4 +1,6 @@
 import requests
+import pandas as pd
+from io import StringIO
 from time import sleep
 
 from .exceptions import YdAPIError, YdAuthError
@@ -29,12 +31,44 @@ from .entities import (
 )
 
 
+class YdResponseReport:
+
+    def __init__(self, response: str) -> None:
+        self._df = self._to_pandas(response)
+        print('-----------------------------')
+        print(self._df)
+        print('-----------------------------')
+
+    @staticmethod
+    def _to_pandas(report_str: str) -> pd.DataFrame:
+        # data_rows = []
+        df = pd.read_csv(StringIO(report_str), sep='\t', header=1,
+                         dtype=str).iloc[:-1]
+        df = df.replace('--', None)
+        return df
+        # for entry in df.to_numpy().tolist():
+        # for entry in df.tolist():
+        #     data_row = {k: v for k, v in zip(columns, entry)}
+        #     data_rows.append(data_row)
+        # return data_rows, columns
+
+    @property
+    def columns(self):
+        return self._df.columns.values
+
+    @property
+    def data(self):
+        return self._df.to_dict(orient='records')
+
+
 class DirectAPI(object):
     API_URL = 'https://api.direct.yandex.com/json/v5/'
 
-    def __init__(
-        self, access_token: str, clid: str, refresh_token: str = '', lang: str = 'ru'
-    ) -> None:
+    def __init__(self,
+                 access_token: str,
+                 clid: str,
+                 refresh_token: str = '',
+                 lang: str = 'ru') -> None:
         """
         :param access_token: str
         :param clid: str
@@ -48,9 +82,10 @@ class DirectAPI(object):
         self._lang = lang.lower()
         self._session.headers['Accept'] = 'application/json'
         self._session.headers['Authorization'] = f'Bearer {self._access_token}'
-        self._session.headers.update(
-            {"Accept-Language": self._lang, "Client-Login": self._clid}
-        )
+        self._session.headers.update({
+            "Accept-Language": self._lang,
+            "Client-Login": self._clid
+        })
         # add entities
         self.Ad = Ad(self)
         self.AdImage = AdImage(self)
@@ -93,7 +128,8 @@ class DirectAPI(object):
 
     def set_access_token(self, access_token: str) -> None:
         self._access_token = access_token
-        self._set_session_headers({"Authorization": f'Bearer {self._access_token}'})
+        self._set_session_headers(
+            {"Authorization": f'Bearer {self._access_token}'})
 
     @property
     def clid(self) -> str:
@@ -113,7 +149,8 @@ class DirectAPI(object):
             response = self._session.post(url, json=params, timeout=10)
             response.encoding = 'utf-8'
             if response.status_code == 200:
-                return response.content.decode('utf-8')
+                response_str = response.content.decode('utf-8')
+                return YdResponseReport(response_str)
             elif response.status_code == 201:
                 # print("Report apply to offline que")
                 retryIn = int(response.headers.get("retryIn", 10))
@@ -125,9 +162,11 @@ class DirectAPI(object):
                 error = response.json()['error']
                 raise YdAPIError(error)
 
-    def _send_api_request(
-        self, service: str, method: str, params: dict, timeout: int = 30
-    ) -> requests.Response:
+    def _send_api_request(self,
+                          service: str,
+                          method: str,
+                          params: dict,
+                          timeout: int = 30) -> requests.Response:
         """
         :param service: str
         :param method: str
