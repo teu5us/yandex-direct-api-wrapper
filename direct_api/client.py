@@ -41,24 +41,22 @@ class YdResponseReport:
 
     @staticmethod
     def _to_pandas(report_str: str) -> pd.DataFrame:
-        # data_rows = []
         df = pd.read_csv(StringIO(report_str), sep='\t', header=1,
                          dtype=str).iloc[:-1]
         df = df.replace('--', None)
         return df
-        # for entry in df.to_numpy().tolist():
-        # for entry in df.tolist():
-        #     data_row = {k: v for k, v in zip(columns, entry)}
-        #     data_rows.append(data_row)
-        # return data_rows, columns
 
     @property
     def columns(self):
         return self._df.columns.values
 
     @property
-    def data(self):
+    def data_rows(self):
         return self._df.to_dict(orient='records')
+
+    @property
+    def data(self):
+        return {'result': {'Reports': self.data_rows}}
 
 
 class DirectAPI(object):

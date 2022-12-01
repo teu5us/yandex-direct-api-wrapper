@@ -1852,12 +1852,13 @@ class YdResponseJSON:
         if error is not None:
             raise YdAPIError(error)
         else:
-            result = response.get('result', None)
-            print('>>> YANDEX ', result.keys(), data_key)
-            data = result.get(data_key, None)
-            print(result)
-            print(data)
-            if data is not None:
-                self.data = data
-            else:
-                raise YdUnknownError
+            self.data = response
+            self.data_key = data_key
+
+    @property
+    def data_rows(self):
+        result = self.data.get('result', None)
+        if result is not None:
+            return result.get(self.data_key, [])
+        else:
+            raise YdUnknownError
