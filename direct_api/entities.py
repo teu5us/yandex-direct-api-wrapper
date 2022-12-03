@@ -1879,6 +1879,10 @@ class YdResponse:
         self.data = data
         self.data_key = data_key
 
+    @property
+    def data_rows(self):
+        return self.data['result'][self.data_key]
+
     def _check_report(self, response):
         if response.status_code in [201, 202]:
             retry_in = response.headers.get("retryIn", 10)
