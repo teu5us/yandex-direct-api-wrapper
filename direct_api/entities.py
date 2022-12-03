@@ -1892,9 +1892,7 @@ class YdResponse:
         if response.status_code in [201, 202]:
             retry_in = response.headers.get("retryIn", 10)
             raise YdAPITimeOutException(retry_in, self.units)
-        else:
-            # TODO json may not be supported
-            print(response.headers, response.content)
+        elif response.status_code != 200:
             self._check_json(self, response.json())
 
     def _check_json(self, data):
