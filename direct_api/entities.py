@@ -1893,6 +1893,8 @@ class YdResponse:
             retry_in = response.headers.get("retryIn", 10)
             raise YdAPITimeOutException(retry_in, self.units)
         else:
+            # TODO json may not be supported
+            print(response.headers, response.content)
             self._check_json(self, response.json())
 
     def _check_json(self, data):
