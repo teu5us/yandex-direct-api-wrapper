@@ -10,16 +10,25 @@ class YdUnknownError(YdException):
     pass
 
 
+class YdAPITimeOutException(YdException):
+
+    def __init__(self, retry_in, scores) -> None:
+        super(YdAPIError, self).__init__()
+        self.retry_in = retry_in
+        self.scores = scores
+
+
 class YdAPIError(YdException):
     __slots__ = ('error', 'code', 'message', 'request_params', 'request_id')
 
-    def __init__(self, error_data):
+    def __init__(self, error, scores):
         super(YdAPIError, self).__init__()
-        self.error_data = error_data
-        self.code = error_data.get('error_code')
-        self.message = error_data.get('error_string')
-        self.description = error_data.get('error_detail')
-        self.request_id = error_data.get('request_id')
+        self.error = error
+        self.scores = scores
+        self.code = error.get('error_code')
+        self.message = error.get('error_string')
+        self.description = error.get('error_detail')
+        self.request_id = error.get('request_id')
 
     def __str__(self):
         return f'{self.code}. {self.message}. {self.description} request_id={self.request_id}'

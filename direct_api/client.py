@@ -1,6 +1,4 @@
 import requests
-import pandas as pd
-from io import StringIO
 from time import sleep
 
 from .exceptions import YdAPIError, YdAuthError
@@ -28,35 +26,8 @@ from .entities import (
     TurboPage,
     Report,
     Client,
+    YdResponse,
 )
-
-
-class YdResponseReport:
-
-    def __init__(self, response: str) -> None:
-        self._df = self._to_pandas(response)
-        print('-----------------------------')
-        print(self._df)
-        print('-----------------------------')
-
-    @staticmethod
-    def _to_pandas(report_str: str) -> pd.DataFrame:
-        df = pd.read_csv(StringIO(report_str), sep='\t', header=1,
-                         dtype=str).iloc[:-1]
-        df = df.replace('--', None)
-        return df
-
-    @property
-    def columns(self):
-        return self._df.columns.values
-
-    @property
-    def data_rows(self):
-        return self._df.to_dict(orient='records')
-
-    @property
-    def data(self):
-        return {'result': {'Reports': self.data_rows}}
 
 
 class DirectAPI(object):
@@ -141,29 +112,9 @@ class DirectAPI(object):
     def access_token(self) -> str:
         return self._access_token
 
-    def _get_reports(self, params: dict) -> str:
-        url = f'{self.API_URL}reports/'
-        while True:
-            response = self._session.post(url, json=params, timeout=10)
-            response.encoding = 'utf-8'
-            if response.status_code == 200:
-                response_str = response.content.decode('utf-8')
-                return YdResponseReport(response_str)
-            elif response.status_code == 201:
-                # print("Report apply to offline que")
-                retryIn = int(response.headers.get("retryIn", 10))
-                sleep(retryIn)
-            elif response.status_code == 202:
-                retryIn = int(response.headers.get("retryIn", 10))
-                sleep(retryIn)
-            else:
-                error = response.json()['error']
-                raise YdAPIError(error)
-
     def _send_api_request(self,
                           service: str,
-                          method: str,
-                          params: dict,
+                          request_body: dict,
                           timeout: int = 30) -> requests.Response:
         """
         :param service: str
@@ -172,13 +123,6 @@ class DirectAPI(object):
         :param timeout: int, default=30
         :return: response object
         """
-        request_body = {'method': method, 'params': params}
         url = f'{self.API_URL}{service}'
         response = self._session.post(url, json=request_body, timeout=timeout)
-        response.raise_for_status()
-        if response.status_code > 204:
-            error_data = response.json()
-            if response.status_code == 401:
-                raise YdAuthError(error_data['error'])
-            raise YdAPIError(error_data['error'])
         return response

@@ -1,7 +1,9 @@
 from abc import ABC
-from .exceptions import ParameterError, YdAPIError, YdUnknownError
+import pandas as pd
+from io import StringIO
+from .exceptions import ParameterError, YdAPITimeOutException, YdAPIError, YdUnknownError
 from .utils import generate_params, convert
-from typing import Optional, TYPE_CHECKING, Union
+from typing import Optional, TYPE_CHECKING, Union, Any
 
 if TYPE_CHECKING:
     from .client import DirectAPI
@@ -59,35 +61,40 @@ class BaseEntity(ABC):
         :return: dict
         """
         params = {'SelectionCriteria': {'Ids': ids}}
-        json_response = self._client._send_api_request(self.service.lower(),
-                                                       method, params).json()
+        response = self._client._send_api_request(self.service.lower(), method,
+                                                  params)
         if key is None:
             key = self._get_data_key()
-        return YdResponseJSON(json_response, key)
+        return YdResponse(response, key)
 
     def _add(self, objects: list, key: Optional[str] = None) -> dict:
         params = {self.service: objects}
-        json_response = self._client._send_api_request(self.service.lower(),
-                                                       'add', params).json()
+        response = self._client._send_api_request(self.service.lower(), 'add',
+                                                  params)
         if key is None:
             key = self._get_data_key()
-        return YdResponseJSON(json_response, key)
+        return YdResponse(response, key)
 
     def _update(self, objects: list, key: Optional[str] = None) -> dict:
         params = {self.service: objects}
-        json_response = self._client._send_api_request(self.service.lower(),
-                                                       'update',
-                                                       params).json()
+        response = self._client._send_api_request(self.service.lower(),
+                                                  'update', params)
         if key is None:
             key = self._get_data_key()
-        return YdResponseJSON(json_response, key)
+        return YdResponse(response, key)
 
-    def _get(self, params: dict, key: Optional[str] = None) -> dict:
-        json_response = self._client._send_api_request(self.service.lower(),
-                                                       'get', params).json()
+    def _get(self,
+             params: dict,
+             key: Optional[str] = None,
+             is_report: bool = False) -> dict:
+        request_body = {'params': params}
+        if not is_report:
+            request_body.update(method='get')
+        service = self.service.lower()
+        response = self._client._send_api_request(service, request_body)
         if key is None:
             key = self._get_data_key()
-        return YdResponseJSON(json_response, key)
+        return YdResponse(response, key, is_report=is_report)
 
     def _delete(self, ids: list) -> dict:
         return self._execute_method_by_ids('delete', ids)
@@ -1718,6 +1725,7 @@ class Report(BaseEntity):
         format: str = 'TSV',
         include_vat: Optional[str] = 'YES',
         include_discount: Optional[str] = "NO",
+        timeout: int = 10,
     ) -> str:
         """
         doc - https://yandex.ru/dev/direct/doc/reports/spec-docpage/
@@ -1765,7 +1773,7 @@ class Report(BaseEntity):
                 ],
                 function_kwargs=locals(),
             ))
-        return self._client._get_reports({'params': params})
+        return self._get(params)
 
 
 class Client(BaseEntity):
@@ -1845,20 +1853,49 @@ class Client(BaseEntity):
         return self._update(clients)
 
 
-class YdResponseJSON:
+class YdResponse:
 
-    def __init__(self, response: dict, data_key: str) -> None:
-        error = response.get('error', None)
+    def __init__(self,
+                 response: dict,
+                 data_key: str,
+                 is_report: bool = False) -> None:
+        # Scores
+        response.raise_for_status()
+        units = self.data.headers['units']
+        scores_keys = ('used', 'left', 'limit')
+        scores_values = map(int, units.split('/'))
+        scores = dict(zip(scores_keys, scores_values))
+        self.scores = scores
+        #
+        if is_report:
+            response.encoding = 'utf-8'
+            self._check_report(response)
+            report = self._to_pandas(response.content.decode('utf-8'))
+            self.columns = report.columns.values
+            data = {'result': {'Reports': report.to_dict(orient='records')}}
+        else:
+            data = response.json()
+            self._check_json(data)
+        self.data = data
+        self.data_key = data_key
+
+    def _check_report(self, response):
+        if response.status_code in [201, 202]:
+            retry_in = response.headers.get("retryIn", 10)
+            raise YdAPITimeOutException(retry_in, self.scores)
+        else:
+            self._check_json(self, response.json())
+
+    def _check_json(self, data):
+        error = data.get('error', None)
         if error is not None:
-            raise YdAPIError(error)
-        else:
-            self.data = response
-            self.data_key = data_key
-
-    @property
-    def data_rows(self):
-        result = self.data.get('result', None)
-        if result is not None:
-            return result.get(self.data_key, [])
-        else:
+            raise YdAPIError(error, self.scores)
+        elif not data.get('result', None):
             raise YdUnknownError
+
+    @staticmethod
+    def _to_pandas(report_str: str) -> pd.DataFrame:
+        df = pd.read_csv(StringIO(report_str), sep='\t', header=1,
+                         dtype=str).iloc[:-1]
+        df = df.replace('--', '')
+        return df
