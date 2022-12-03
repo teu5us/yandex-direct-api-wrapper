@@ -47,9 +47,6 @@ class BaseEntity(ABC):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__} - endpoint: {self.service}'
 
-    def _get_data_key(self):
-        return '%ss' % self.__class__.__name__
-
     def _execute_method_by_ids(self,
                                method: str,
                                ids: list,
@@ -63,38 +60,27 @@ class BaseEntity(ABC):
         params = {'SelectionCriteria': {'Ids': ids}}
         response = self._client._send_api_request(self.service.lower(), method,
                                                   params)
-        if key is None:
-            key = self._get_data_key()
-        return YdResponse(response, key)
+        return YdResponse(response, self.service)
 
-    def _add(self, objects: list, key: Optional[str] = None) -> dict:
+    def _add(self, objects: list) -> dict:
         params = {self.service: objects}
         response = self._client._send_api_request(self.service.lower(), 'add',
                                                   params)
-        if key is None:
-            key = self._get_data_key()
-        return YdResponse(response, key)
+        return YdResponse(response, self.service)
 
-    def _update(self, objects: list, key: Optional[str] = None) -> dict:
+    def _update(self, objects: list) -> dict:
         params = {self.service: objects}
         response = self._client._send_api_request(self.service.lower(),
                                                   'update', params)
-        if key is None:
-            key = self._get_data_key()
-        return YdResponse(response, key)
+        return YdResponse(response, self.service)
 
-    def _get(self,
-             params: dict,
-             key: Optional[str] = None,
-             is_report: bool = False) -> dict:
+    def _get(self, params: dict) -> dict:
         request_body = {'params': params}
-        if not is_report:
+        if self.service != 'Reports':
             request_body.update(method='get')
-        service = self.service.lower()
-        response = self._client._send_api_request(service, request_body)
-        if key is None:
-            key = self._get_data_key()
-        return YdResponse(response, key, is_report=is_report)
+        response = self._client._send_api_request(self.service.lower(),
+                                                  request_body)
+        return YdResponse(response, self.service)
 
     def _delete(self, ids: list) -> dict:
         return self._execute_method_by_ids('delete', ids)
@@ -1707,7 +1693,7 @@ class VCard(BaseEntity):
 
 
 class Report(BaseEntity):
-    service: str = 'reports'
+    service: str = 'Reports'
 
     def get(
         self,
@@ -1882,28 +1868,25 @@ class YdUnits:
 
 class YdResponse:
 
-    def __init__(self,
-                 response: object,
-                 data_key: str,
-                 is_report: bool = False) -> None:
+    def __init__(self, response: object, service: str) -> None:
         response.raise_for_status()
         self.units = YdUnits(response)
         #
-        if is_report:
+        if service == 'Reports':
             response.encoding = 'utf-8'
             self._check_report(response)
             report = self._to_pandas(response.content.decode('utf-8'))
             self.columns = report.columns.values
-            data = {'result': {'Reports': report.to_dict(orient='records')}}
+            data = {'result': {service: report.to_dict(orient='records')}}
         else:
             data = response.json()
             self._check_json(data)
         self.data = data
-        self.data_key = data_key
+        self.service = service
 
     @property
     def data_rows(self):
-        return self.data['result'][self.data_key]
+        return self.data['result'][self.service]
 
     def _check_report(self, response):
         if response.status_code in [201, 202]:
