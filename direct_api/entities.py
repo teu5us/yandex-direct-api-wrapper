@@ -1853,22 +1853,41 @@ class Client(BaseEntity):
         return self._update(clients)
 
 
+class YdUnits:
+
+    def __init__(self, response: object) -> None:
+        units = response.headers.get('Units', None)
+        keys = ('used', 'left', 'limit')
+        if units:
+            values = map(int, units.split('/'))
+        else:
+            values = (None, None, None)
+        self.data = dict(zip(keys, values))
+
+    @property
+    def used(self):
+        return self.data['used']
+
+    @property
+    def left(self):
+        return self.data['left']
+
+    @property
+    def limit(self):
+        return self.data['limit']
+
+    def to_dict(self):
+        return self.data
+
+
 class YdResponse:
 
     def __init__(self,
-                 response: dict,
+                 response: object,
                  data_key: str,
                  is_report: bool = False) -> None:
-        # Scores
         response.raise_for_status()
-        units = response.headers.get('Units', None)
-        scores_keys = ('used', 'left', 'limit')
-        if not units:
-            scores_values = map(int, units.split('/'))
-        else:
-            scores_values = (None, None, None)
-        scores = dict(zip(scores_keys, scores_values))
-        self.scores = scores
+        self.units = YdUnits(response)
         #
         if is_report:
             response.encoding = 'utf-8'
@@ -1889,14 +1908,14 @@ class YdResponse:
     def _check_report(self, response):
         if response.status_code in [201, 202]:
             retry_in = response.headers.get("retryIn", 10)
-            raise YdAPITimeOutException(retry_in, self.scores)
+            raise YdAPITimeOutException(retry_in, self.units)
         else:
             self._check_json(self, response.json())
 
     def _check_json(self, data):
         error = data.get('error', None)
         if error:
-            raise YdAPIError(error, self.scores)
+            raise YdAPIError(error, self.units)
         elif not data.get('result', None):
             raise YdUnknownError
 
