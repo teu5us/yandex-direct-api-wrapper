@@ -1861,10 +1861,12 @@ class YdResponse:
                  is_report: bool = False) -> None:
         # Scores
         response.raise_for_status()
-        print(response.headers)
-        units = response.headers['units']
+        units = response.headers.get('Units', None)
         scores_keys = ('used', 'left', 'limit')
-        scores_values = map(int, units.split('/'))
+        if not units:
+            scores_values = map(int, units.split('/'))
+        else:
+            scores_values = (None, None, None)
         scores = dict(zip(scores_keys, scores_values))
         self.scores = scores
         #
@@ -1893,7 +1895,7 @@ class YdResponse:
 
     def _check_json(self, data):
         error = data.get('error', None)
-        if error is not None:
+        if error:
             raise YdAPIError(error, self.scores)
         elif not data.get('result', None):
             raise YdUnknownError
