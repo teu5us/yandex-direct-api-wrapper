@@ -1861,6 +1861,7 @@ class YdResponse:
                  is_report: bool = False) -> None:
         # Scores
         response.raise_for_status()
+        print(response.headers)
         units = response.headers['units']
         scores_keys = ('used', 'left', 'limit')
         scores_values = map(int, units.split('/'))
