@@ -7,24 +7,29 @@ class YdAuthError(YdException):
 
 
 class YdUnknownError(YdException):
-    pass
+
+    def __init__(self, units, service) -> None:
+        super().__init__()
+        self.units = units
+        self.service = service
 
 
 class YdAPITimeOutException(YdException):
 
-    def __init__(self, retry_in, scores) -> None:
+    def __init__(self, units, service) -> None:
         super().__init__()
-        self.retry_in = retry_in
-        self.scores = scores
+        self.units = units
+        self.service = service
 
 
 class YdAPIError(YdException):
     __slots__ = ('error', 'code', 'message', 'request_params', 'request_id')
 
-    def __init__(self, error, scores):
+    def __init__(self, error, units, service):
         super().__init__()
         self.error = error
-        self.scores = scores
+        self.units = units
+        self.service = service
         self.code = error.get('error_code')
         self.message = error.get('error_string')
         self.description = error.get('error_detail')

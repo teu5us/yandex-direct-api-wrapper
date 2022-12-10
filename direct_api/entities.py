@@ -1871,6 +1871,7 @@ class YdResponse:
     def __init__(self, response: object, service: str) -> None:
         response.raise_for_status()
         self.units = YdUnits(response)
+        self.service = service
         #
         if service == 'Reports':
             response.encoding = 'utf-8'
@@ -1882,7 +1883,6 @@ class YdResponse:
             data = response.json()
             self._check_json(data)
         self.data = data
-        self.service = service
 
     @property
     def data_rows(self):
@@ -1890,17 +1890,16 @@ class YdResponse:
 
     def _check_report(self, response):
         if response.status_code in [201, 202]:
-            retry_in = response.headers.get("retryIn", 10)
-            raise YdAPITimeOutException(retry_in, self.units)
+            raise YdAPITimeOutException(self.units, self.service)
         elif response.status_code != 200:
             self._check_json(self, response.json())
 
     def _check_json(self, data):
         error = data.get('error', None)
         if error:
-            raise YdAPIError(error, self.units)
+            raise YdAPIError(error, self.units, self.service)
         elif not data.get('result', None):
-            raise YdUnknownError
+            raise YdUnknownError(self.units, self.service)
 
     @staticmethod
     def _to_pandas(report_str: str) -> pd.DataFrame:
